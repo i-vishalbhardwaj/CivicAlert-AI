@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CivicAlert AI - Visual Grievance System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>CivicAlert AI</h1>
+            <p>AI-Driven Visual Grievance & Municipal Reporting System[cite: 1]</p>
+        </header>
+
+        <main>
+            <div class="upload-card">
+                <input type="file" id="imageInput" accept="image/*" capture="environment">
+                <button id="getLocationBtn" onclick="fetchLocation()">Get GPS Location</button>
+                <p id="locationStatus">Location: Not fetched</p>
+                <button id="submitBtn" onclick="uploadAndAnalyze()" disabled>Analyze & Draft Complaint</button>
+            </div>
+
+            <div id="loading" class="hidden">
+                <div class="spinner"></div>
+                <p>Gemini Vision AI is analyzing the hazard and drafting the letter...</p>
+            </div>
+
+            <div id="resultCard" class="hidden">
+                <h2>Analysis & Official Complaint Letter</h2>
+                <div id="outputContent"></div>
+                <a id="emailBtn" class="email-btn" href="#" target="_blank">Send Email to Municipal Authority</a>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let latitude = null;
+        let longitude = null;
+
+        document.getElementById('imageInput').addEventListener('change', function() {
+            if(this.files.length > 0) {
+                document.getElementById('submitBtn').disabled = false;
+            }
+        });
+
+        function fetchLocation() {
+            const statusText = document.getElementById('locationStatus');
+            if (navigator.geolocation) {
+                statusText.innerText = "Fetching GPS coordinates...";
+                navigator.geolocation.getCurrentPosition(position => {
+                    latitude = position.coords.latitude;
+                    longitude = position.coords.longitude;
+                    statusText.innerText = `Location Locked: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+                }, error => {
+                    statusText.innerText = "Error fetching location. Using default.";
+                    latitude = "28.6139"; // Default fallback (e.g., Delhi)
+                    longitude = "77.2090";
+                });
+            } else {
+                statusText.innerText = "Geolocation not supported by browser.";
+            }
+        }
+
+        async function uploadAndAnalyze() {
+            const fileInput = document.getElementById('imageInput');
+            if (fileInput.files.length === 0) return alert("Please upload an image first!");
+
+            const formData = new FormData();
+            formData.append('image', fileInput.files[0]);
+            formData.append('latitude', latitude || '28.6139');
+            formData.append('longitude', longitude || '77.2090');
+
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('resultCard').classList.add('hidden');
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                document.getElementById('loading').classList.add('hidden');
+                
+                if(data.success) {
+                    document.getElementById('resultCard').classList.remove('hidden');
+                    document.getElementById('outputContent').innerHTML = `<pre>${data.analysis}</pre>`;
+                    
+                    
+                    const mailSubject = encodeURIComponent("Urgent Civic Grievance Report - CivicAlert AI");
+                    const mailBody = encodeURIComponent(data.analysis);
+                    document.getElementById('emailBtn').href = `mailto:municipal.commissioner@gov.in?subject=${mailSubject}&body=${mailBody}`;
+                } else {
+                    alert("Error: " + data.error);
+                }
+            } catch (err) {
+                document.getElementById('loading').classList.add('hidden');
+                alert("An error occurred during analysis.");
+            }
+        }
+    </script>
+</body>
+</html>
